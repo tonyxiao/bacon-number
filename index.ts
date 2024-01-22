@@ -91,58 +91,55 @@ async function getAdjacentActors(actorIds: number[]): Promise<Set<number>> {
 }
 
 async function getBaconNumber(startActorId: number): Promise<number> {
-  const startQueue = [{ actorId: startActorId, baconNumber: 0 }]
-  const startVisited = new Set([startActorId])
-  let startBaconNumber = 0
-
-  const endQueue = [{ actorId: kevinBaconId, baconNumber: 0 }]
-  const endVisited = new Set([kevinBaconId])
-  let endBaconNumber = 0
+  const start = {
+    queue: [{ actorId: startActorId, baconNumber: 0 }],
+    visited: new Set([startActorId]),
+    baconNumber: 0,
+  }
+  const end = {
+    queue: [{ actorId: kevinBaconId, baconNumber: 0 }],
+    visited: new Set([kevinBaconId]),
+    baconNumber: 0,
+  }
 
   while (true) {
-    if (!startQueue.length || !endQueue.length) {
+    if (!start.queue.length || !end.queue.length) {
       break
     }
-    const queue = startBaconNumber <= endBaconNumber ? startQueue : endQueue
-    const visited = queue === startQueue ? startVisited : endVisited
-    let baconNumber = queue === startQueue ? startBaconNumber : endBaconNumber
-    const otherBaconNumber =
-      queue === startQueue ? endBaconNumber : startBaconNumber
-    const otherVisited = queue === startQueue ? endVisited : startVisited
-
-    let [item] = queue.splice(0, 1)
+    const current = start.baconNumber <= end.baconNumber ? start : end
+    const other = current === start ? end : start
+    let [item] = current.queue.splice(0, 1)
     if (!item) {
       break
     }
     console.log(
       '[getBaconNumber] Processing from',
-      queue === startQueue ? 'start' : 'end',
-      { baconNumber, actorId: item.actorId, otherBaconNumber },
+      current === start ? 'start' : 'end',
+      {
+        baconNumber: current.baconNumber,
+        actorId: item.actorId,
+        otherBaconNumber: other.baconNumber,
+      },
     )
-    if (otherVisited.has(item.actorId)) {
-      return otherBaconNumber + item.baconNumber
+    if (other.visited.has(item.actorId)) {
+      return other.baconNumber + item.baconNumber
     }
     const adjacentIds = await getAdjacentActors([item.actorId])
     // performance optimization so we don't need to visit further adjacencies
     for (const id of adjacentIds) {
-      if (otherVisited.has(id)) {
-        return otherBaconNumber + item.baconNumber + 1
+      if (other.visited.has(id)) {
+        return other.baconNumber + item.baconNumber + 1
       }
     }
 
-    const toQueue = [...adjacentIds].filter((id) => !visited.has(id))
+    const toQueue = [...adjacentIds].filter((id) => !current.visited.has(id))
     console.log(
       `[getBaconNumber] ${item.actorId} not adjacent, will queue ${toQueue.length}`,
     )
     for (const id of toQueue) {
-      queue.push({ actorId: id, baconNumber: item.baconNumber + 1 })
-      visited.add(id)
-      // by value, not reference....
-      if (queue === startQueue) {
-        startBaconNumber = item.baconNumber
-      } else {
-        endBaconNumber = item.baconNumber
-      }
+      current.queue.push({ actorId: id, baconNumber: item.baconNumber + 1 })
+      current.visited.add(id)
+      current.baconNumber = item.baconNumber
     }
   }
   return -1
