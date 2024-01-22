@@ -157,9 +157,10 @@ async function main() {
   // console.log(await getBaconNumberForActorName('Jennifer Lawrence'))
   // console.log(await getBaconNumberForActorName('Kevin Bacon'))
   // console.log(await getBaconNumberForActorName('Colman Domingo')) // 1
-  console.log(await getBaconNumberForActorName('Emma Watson')) // 2
+  console.log(await getBaconNumberForActorName(process.argv[2]!)) // 2
   // console.log(await getBaconNumberForActorName('Julianne Moore'))
   // console.log(await getAdjacentActors(kevinBaconId))
   // console.log(await getAdjacentActors(91671))
 }
+
 main()
