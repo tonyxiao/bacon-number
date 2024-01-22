@@ -38,6 +38,8 @@ async function getBaconNumberForActorName(actorName: string): Promise<number> {
   if (!actor) {
     throw new Error(`Actor not found: ${actorName}`)
   }
+  console.log('Will get bacon number for ', actorName, actor.id)
+  console.log('Bacon number is', 4724)
   return getBaconNumber(actor.id!)
 
   // get all movies of given actor
@@ -53,53 +55,94 @@ async function getBaconNumberForActorName(actorName: string): Promise<number> {
 // b = 4, n^2, n^2 = n^2
 // O(n^(b/2))
 
-async function getAdjacentActors(actorId: number): Promise<Set<number>> {
-  console.log(`[getAdjacentActors] Getting adjacent actors for ${actorId}`)
-  const actorCreditsRes = await client.GET(
-    '/3/person/{person_id}/movie_credits',
-    { params: { path: { person_id: actorId } } },
+async function getAdjacentActors(actorIds: number[]): Promise<Set<number>> {
+  console.log(`[getAdjacentActors] Getting adjacent actors for ${actorIds}`)
+  const movieId2dArray = await Promise.all(
+    actorIds.map(async (actorId) => {
+      const res = await client.GET('/3/person/{person_id}/movie_credits', {
+        params: { path: { person_id: actorId } },
+      })
+      // cast here is actually movie, not actors
+      return res.data?.cast?.map((a) => a.id!) ?? []
+    }),
   )
-  const movies = actorCreditsRes.data?.cast ?? []
+  const movieIds = new Set(movieId2dArray.flat())
+
   const actorId2dArray = await Promise.all(
-    movies.map(async (movie) => {
+    [...movieIds].map(async (movieId) => {
       const res = await client.GET('/3/movie/{movie_id}/credits', {
-        params: { path: { movie_id: movie.id! } },
+        params: { path: { movie_id: movieId } },
       })
       return res.data?.cast?.map((a) => a.id!) ?? []
     }),
   )
-  const set = new Set(actorId2dArray.flat())
-  set.delete(actorId) // Delete itself from the adjacency list
+  const adjacentActorIds = new Set(actorId2dArray.flat())
+  // Delete initial actor ids from the adjacency list
+  actorIds.forEach((id) => adjacentActorIds.delete(id))
   console.log(
-    `[getAdjacentActors] Found ${set.size} adjacent actors for ${actorId}`,
+    `[getAdjacentActors] actorIds=${actorIds} adjacent=${
+      //   [
+      //   ...adjacentActorIds,
+      // ].join(',')
+      adjacentActorIds.size
+    }`,
   )
-  return set
+  return adjacentActorIds
 }
 
 async function getBaconNumber(startActorId: number): Promise<number> {
-  const queue = [{ actorId: startActorId, baconNumber: 0 }]
-  const visited = new Set([startActorId])
+  const startQueue = [{ actorId: startActorId, baconNumber: 0 }]
+  const startVisited = new Set([startActorId])
+  let startBaconNumber = 0
+
+  const endQueue = [{ actorId: kevinBaconId, baconNumber: 0 }]
+  const endVisited = new Set([kevinBaconId])
+  let endBaconNumber = 0
 
   while (true) {
+    if (!startQueue.length || !endQueue.length) {
+      break
+    }
+    const queue = startBaconNumber <= endBaconNumber ? startQueue : endQueue
+    const visited = queue === startQueue ? startVisited : endVisited
+    let baconNumber = queue === startQueue ? startBaconNumber : endBaconNumber
+    const otherBaconNumber =
+      queue === startQueue ? endBaconNumber : startBaconNumber
+    const otherVisited = queue === startQueue ? endVisited : startVisited
+
     let [item] = queue.splice(0, 1)
     if (!item) {
       break
     }
-    if (item.actorId === kevinBaconId) {
-      return item.baconNumber
+    console.log(
+      '[getBaconNumber] Processing from',
+      queue === startQueue ? 'start' : 'end',
+      { baconNumber, actorId: item.actorId, otherBaconNumber },
+    )
+    if (otherVisited.has(item.actorId)) {
+      return otherBaconNumber + item.baconNumber
     }
-    const adjacentIds = await getAdjacentActors(item.actorId)
+    const adjacentIds = await getAdjacentActors([item.actorId])
     // performance optimization so we don't need to visit further adjacencies
-    if (adjacentIds.has(kevinBaconId)) {
-      return item.baconNumber + 1
+    for (const id of adjacentIds) {
+      if (otherVisited.has(id)) {
+        return otherBaconNumber + item.baconNumber + 1
+      }
     }
+
     const toQueue = [...adjacentIds].filter((id) => !visited.has(id))
     console.log(
-      `[getBaconNumber] ${item.actorId} not adjacent to Kevin Bacon, will queue ${toQueue.length}`,
+      `[getBaconNumber] ${item.actorId} not adjacent, will queue ${toQueue.length}`,
     )
     for (const id of toQueue) {
       queue.push({ actorId: id, baconNumber: item.baconNumber + 1 })
       visited.add(id)
+      // by value, not reference....
+      if (queue === startQueue) {
+        startBaconNumber = item.baconNumber
+      } else {
+        endBaconNumber = item.baconNumber
+      }
     }
   }
   return -1
@@ -115,9 +158,9 @@ async function main() {
   // const kevinBacon = res.data?.results?.[0]
   // console.log(kevinBacon)
   // console.log(await getBaconNumberForActorName('Jennifer Lawrence'))
-  // console.log(await getBaconNumberForActorName('Emma Watson'))
-  // console.log(await getBaconNumberForActorName('Colman Domingo'))
-  console.log(await getBaconNumberForActorName('Emma Watson'))
+  // console.log(await getBaconNumberForActorName('Kevin Bacon'))
+  // console.log(await getBaconNumberForActorName('Colman Domingo')) // 1
+  console.log(await getBaconNumberForActorName('Emma Watson')) // 2
   // console.log(await getBaconNumberForActorName('Julianne Moore'))
   // console.log(await getAdjacentActors(kevinBaconId))
   // console.log(await getAdjacentActors(91671))
